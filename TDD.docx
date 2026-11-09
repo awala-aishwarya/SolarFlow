@@ -1,0 +1,251 @@
+# SolarFlow – Technical Design Document
+
+**Project:** Rooftop Solar Lead Qualification, Quotation and Project Tracker  
+**Version:** 1.0  
+**Status:** Working MVP  
+**Prepared for:** ISO Code Labs – Software Engineering Intern Assignment
+
+## 1. Project Overview
+
+SolarFlow is a web-based management application designed for rooftop solar installation businesses. It supports customer lead registration, electricity bill uploads, lead qualification, solar quotation calculations, project management and customer-facing installation tracking.
+
+The goal is to reduce manual lead handling, improve qualification decisions and provide visibility into the solar installation lifecycle.
+
+## 2. Problem Statement
+
+Solar installation businesses often receive enquiries through WhatsApp and spreadsheets. Reviewing electricity bills, identifying suitable customers, preparing quotations and tracking installation progress manually can be time-consuming.
+
+SolarFlow addresses these problems through a centralized application with structured customer data, deterministic qualification logic, quotation calculations and project tracking.
+
+## 3. Technology Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | React, TypeScript, Vite |
+| Styling | Tailwind CSS |
+| Icons | Lucide React |
+| Backend | Python, FastAPI |
+| Database | SQLite |
+| ORM | SQLAlchemy |
+| Validation | Pydantic |
+| PDF generation | ReportLab |
+| API communication | Fetch API / REST |
+
+## 4. System Architecture
+
+The application follows a frontend-backend architecture.
+
+**Frontend**
+- React dashboard displays lead and project information.
+- Lead registration form collects customer and electricity details.
+- Customer tracking page displays project progress.
+- Frontend communicates with backend REST APIs.
+
+**Backend**
+- FastAPI exposes REST endpoints.
+- Pydantic validates incoming request data.
+- SQLAlchemy manages database operations.
+- Lead scoring service calculates qualification priority.
+- Quotation engine performs solar cost and savings calculations.
+- PDF generator produces downloadable quotations.
+
+**Database**
+- SQLite stores lead and project records.
+- Uploaded electricity bills are stored in the backend uploads directory.
+
+## 5. Main Modules
+
+### 5.1 Lead Management
+
+The lead registration form captures:
+- Customer name and phone number
+- Property ownership
+- Roof type and roof area
+- Monthly electricity bill
+- Pincode
+- Average monthly electricity consumption
+- Optional electricity bill upload
+
+Each lead receives a unique lead ID.
+
+### 5.2 Electricity Bill Upload
+
+The application accepts PDF, JPG, JPEG and PNG electricity bills, subject to file size and file validation.
+
+Uploaded files are stored by the backend and associated with the corresponding lead.
+
+**Current implementation limitation:** Bill upload and storage are implemented, but automated OCR/LLM extraction and customer confirmation of extracted bill fields are not yet implemented. These are planned enhancements and are not represented as completed functionality.
+
+### 5.3 Lead Qualification Engine
+
+The qualification engine uses deterministic Python rules rather than relying on an LLM to make business decisions.
+
+Inputs include:
+- Ownership status
+- Electricity consumption
+- Monthly bill
+- Available roof area
+
+The engine calculates a score, assigns a priority and recommends a next action.
+
+Possible priorities include High, Medium and Low. Tenant leads and unsuitable or low-consumption cases can be directed to a short verification call instead of being automatically rejected.
+
+System capacity is estimated using an annual generation assumption of 1,400 units per kW and available roof area.
+
+### 5.4 Solar Quotation Engine
+
+The quotation engine calculates:
+- Suggested solar system capacity
+- Estimated annual generation
+- Installation cost
+- Illustrative subsidy
+- Net customer cost
+- Estimated annual savings
+- Estimated payback period
+
+The current prototype uses configurable assumptions in the calculation service. Subsidy and pricing figures are illustrative and must be verified against current official schemes and actual installer pricing before commercial use.
+
+### 5.5 PDF Quotation
+
+The backend uses ReportLab to generate downloadable quotation PDFs containing system and financial estimates.
+
+### 5.6 Project Tracking
+
+The project module supports project creation and status updates.
+
+The implemented project stages are:
+1. Survey Scheduled
+2. Quotation Shared
+3. Advance Received
+4. Installation In Progress
+5. Installation Completed
+6. Net Metering Documentation
+7. Subsidy Credited
+
+A unique tracking token allows customers to view their project progress through a public tracking page.
+
+## 6. Database Design
+
+### Lead
+
+| Field | Purpose |
+|---|---|
+| id | Database primary key |
+| lead_id | Unique lead identifier |
+| name | Customer name |
+| phone | Customer contact |
+| ownership | Owner or tenant |
+| roof_type | Roof construction type |
+| roof_area | Available roof area |
+| monthly_bill | Monthly electricity bill |
+| pincode | Customer location |
+| avg_units | Average monthly units |
+| recommended_kw | Suggested system capacity |
+| score | Qualification priority |
+| status | Lead status |
+| bill_file | Uploaded bill filename |
+| created_at | Lead creation timestamp |
+
+### Project
+
+| Field | Purpose |
+|---|---|
+| id | Database primary key |
+| project_id | Unique project identifier |
+| tracking_token | Customer tracking token |
+| lead_id | Associated lead |
+| customer_name | Customer name |
+| system_capacity_kw | Solar system capacity |
+| project_status | Current project stage |
+| advance_paid | Recorded advance |
+| installation_cost | Recorded installation cost |
+| subsidy_status | Subsidy progress |
+| created_at | Project creation timestamp |
+
+## 7. Main Application Workflows
+
+**Lead registration**
+1. Sales staff opens the Add New Lead form.
+2. Customer and property information is entered.
+3. Optional electricity bill is uploaded.
+4. Backend validates and stores the lead.
+5. Lead scoring endpoint calculates priority.
+6. Dashboard refreshes to show the new record.
+
+**Quotation generation**
+1. A suitable system capacity is selected.
+2. The quotation engine calculates generation and financial estimates.
+3. The backend generates a PDF quotation.
+
+**Project tracking**
+1. A project is created from an existing lead.
+2. Staff updates the project stage.
+3. Customer opens the unique tracking URL.
+4. The tracking page displays completed and upcoming stages.
+
+## 8. API Design
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| POST | `/leads/` | Create a lead |
+| GET | `/leads/` | Retrieve leads |
+| GET | `/leads/{lead_id}` | Retrieve a specific lead |
+| POST | `/leads/{lead_id}/bill` | Upload electricity bill |
+| POST | `/leads/{lead_id}/score` | Calculate lead priority |
+| POST | `/leads/{lead_id}/quote` | Generate quotation data |
+| GET | `/leads/{lead_id}/quote/pdf` | Download quotation PDF |
+| POST | `/projects/{lead_id}` | Create a project |
+| GET | `/projects/` | Retrieve projects |
+| PATCH | `/projects/{project_id}/status` | Update project status |
+| GET | `/projects/{project_id}/tracking-link` | Generate customer tracking link |
+| GET | `/projects/track/{token}` | Retrieve customer-facing tracking information |
+
+## 9. AI and Business Logic Decisions
+
+Business-critical calculations, including lead qualification, solar generation, subsidy and payback, are handled through deterministic Python logic.
+
+AI-assisted electricity bill extraction is planned but not completed in this MVP. A future implementation can use OCR and an LLM to extract consumer number, tariff, sanctioned load and monthly units, followed by customer confirmation and correction.
+
+AI should not independently determine subsidy eligibility or calculate financial values.
+
+## 10. UI and Product Decisions
+
+- A dashboard provides an overview of leads and projects.
+- Lead registration uses structured fields and validation.
+- Customer tracking is separated from the internal dashboard.
+- Priority labels help sales staff identify follow-up opportunities.
+- Customer tracking tokens avoid exposing internal project records through predictable IDs.
+
+## 11. Security and Privacy Considerations
+
+- API input validation is handled using Pydantic.
+- Electricity bill uploads are restricted by file type and size.
+- Secrets should be stored in environment variables.
+- Real customer data and uploaded bills should not be committed to Git.
+- Customer tracking links should use unguessable tokens.
+- Production deployment should add authentication, role-based authorization, HTTPS, stronger file validation, retention policies and access controls.
+
+The application is a prototype and is not yet production-hardened.
+
+## 12. Limitations and Future Improvements
+
+The following are not fully implemented in the current MVP:
+
+- Automated OCR/LLM electricity bill extraction and customer confirmation
+- WhatsApp/SMS notifications
+- Stuck-project alerts and escalation dashboard
+- Admin interface for effective-dated pricing and subsidy tables
+- Homeowner and sales staff authentication and role-based permissions
+- Marathi and Hindi localization
+- Automated tests and production deployment
+
+These improvements can be added in subsequent iterations.
+
+## 13. Conclusion
+
+SolarFlow demonstrates an end-to-end foundation for rooftop solar lead and project management. The current MVP implements lead registration, bill upload, deterministic qualification, quotation calculations, PDF generation and customer-facing project tracking.
+
+The modular architecture allows additional AI-assisted extraction, notification and administrative capabilities to be integrated in future versions.
+
+**Repository URL:** Not yet published  
+**Live application URL:** Not deployed; currently runs locally
